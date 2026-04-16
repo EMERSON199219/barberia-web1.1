@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barbería Premium - Cortes de Calidad</title>
+    <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="navbar">
+            <h1>💈 Barbería Premium</h1>
+            <ul class="nav-links">
+                <li><a href="#servicios">Servicios</a></li>
+                <li><a href="#citas">Citas</a></li>
+                <li><a href="#contacto">Contacto</a></li>
+                <li><a href="admin.html">Admin</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h2>Bienvenido a tu Barbería de Confianza</h2>
+            <p>Cortes modernos, profesionales y con estilo</p>
+            <a href="#citas" class="btn">Reservar Cita</a>
+        </div>
+    </section>
+
+    <!-- Servicios -->
+    <section id="servicios" class="servicios">
+        <h2>Nuestros Servicios</h2>
+        <div class="cards">
+            <div class="card">
+                <h3>✂️ Corte Clásico</h3>
+                <p>Corte tradicional con navaja</p>
+                <p class="price">$15.000</p>
+            </div>
+            <div class="card">
+                <h3>💇 Corte + Barba</h3>
+                <p>Corte moderno + Arreglo de barba</p>
+                <p class="price">$20.000</p>
+            </div>
+            <div class="card">
+                <h3>😍 Cejas</h3>
+                <p>Depilación y arreglo de cejas</p>
+                <p class="price">$5.000</p>
+            </div>
+            <div class="card">
+                <h3>💈 Paquete Completo</h3>
+                <p>Corte + Barba + Productos</p>
+                <p class="price">$30.000</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Formulario de Citas -->
+    <section id="citas" class="citas">
+        <h2>Reserva tu Cita</h2>
+        <form class="form-cita">
+            <input type="text" placeholder="Tu nombre" required>
+            <input type="email" placeholder="Tu email" required>
+            <input type="tel" placeholder="Tu teléfono" required>
+            <input type="date" required>
+            <select required id="hora-select">
+                <option value="">Selecciona una hora</option>
+                <optgroup label="Mañana">
+                    <option value="08:00">8:00 AM</option>
+                    <option value="09:00">9:00 AM</option>
+                    <option value="10:00">10:00 AM</option>
+                    <option value="11:00">11:00 AM</option>
+                    <option value="12:00">12:00 PM</option>
+                </optgroup>
+                <optgroup label="Tarde">
+                    <option value="13:00">1:00 PM</option>
+                    <option value="14:00">2:00 PM</option>
+                    <option value="15:00">3:00 PM</option>
+                    <option value="16:00">4:00 PM</option>
+                    <option value="17:00">5:00 PM</option>
+                    <option value="18:00">6:00 PM</option>
+                    <option value="19:00">7:00 PM</option>
+                    <option value="20:00">8:00 PM</option>
+                </optgroup>
+            </select>
+            <select required>
+                <option value="">Selecciona un servicio</option>
+                <option value="corte_clasico">Corte Clásico - $15.000</option>
+                <option value="corte_barba">Corte + Barba - $20.000</option>
+                <option value="cejas">Cejas - $5.000</option>
+                <option value="paquete_completo">Paquete Completo - $30.000</option>
+            </select>
+            <textarea placeholder="Notas adicionales" rows="4"></textarea>
+            <button type="submit" class="btn-submit">Reservar</button>
+        </form>
+    </section>
+
+    <!-- Footer -->
+    <footer id="contacto">
+        <p>&copy; 2024 Barbería Premium. Todos los derechos reservados.</p>
+        <p>📍 Calle Principal 123 | 📞 +1 (555) 123-4567</p>
+    </footer>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
