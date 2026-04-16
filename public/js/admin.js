@@ -59,7 +59,6 @@ async function renderCitas() {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${cita.nombre}</td>
-                <td>${cita.email}</td>
                 <td>${cita.telefono}</td>
                 <td>${cita.servicio}</td>
                 <td>${cita.fecha}</td>
@@ -145,8 +144,6 @@ citasTableBody.addEventListener('click', async (e) => {
     if (button.classList.contains('edit-btn')) {
         const nombre = prompt('Nombre:');
         if (!nombre) return;
-        const email = prompt('Email:');
-        if (!email) return;
         const telefono = prompt('Teléfono:');
         if (!telefono) return;
         const servicio = prompt('Servicio:');
@@ -155,7 +152,7 @@ citasTableBody.addEventListener('click', async (e) => {
 
         await request(`/citas/${index}`, {
             method: 'PUT',
-            body: JSON.stringify({ nombre, email, telefono, servicio, notas }),
+            body: JSON.stringify({ nombre, telefono, servicio, notas }),
         });
         renderCitas();
     }

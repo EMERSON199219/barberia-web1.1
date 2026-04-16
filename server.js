@@ -60,17 +60,36 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/citas', async (req, res) => {
-    const { nombre, email, telefono, fecha, hora, servicio, notas } = req.body;
-    if (!nombre || !email || !telefono || !fecha || !hora || !servicio) {
+    const { nombre, telefono, fecha, hora, servicio, notas } = req.body;
+    if (!nombre || !telefono || !fecha || !hora || !servicio) {
         return res.status(400).json({ error: 'Faltan campos obligatorios' });
     }
 
-    const cita = { nombre, email, telefono, fecha, hora, servicio, notas };
     const citas = await readCitas();
+    const turnoOcupado = citas.some(cita => cita.fecha === fecha && cita.hora === hora);
+    if (turnoOcupado) {
+        return res.status(409).json({ error: 'El turno ya está reservado para esta fecha' });
+    }
+
+    const cita = { nombre, telefono, fecha, hora, servicio, notas };
     citas.push(cita);
     await writeCitas(citas);
 
     res.status(201).json({ message: 'Cita reservada', cita });
+});
+
+app.get('/api/turnos', async (req, res) => {
+    const { date } = req.query;
+    if (!date) {
+        return res.status(400).json({ error: 'Falta la fecha' });
+    }
+
+    const citas = await readCitas();
+    const horas = citas
+        .filter(cita => cita.fecha === date)
+        .map(cita => cita.hora);
+
+    res.json({ horas });
 });
 
 app.get('/api/citas', authMiddleware, async (req, res) => {
@@ -80,17 +99,21 @@ app.get('/api/citas', authMiddleware, async (req, res) => {
 
 app.put('/api/citas/:index', authMiddleware, async (req, res) => {
     const index = Number(req.params.index);
-    const { nombre, email, telefono, fecha, hora, servicio, notas } = req.body;
+    const { nombre, telefono, fecha, hora, servicio, notas } = req.body;
     const citas = await readCitas();
 
     if (isNaN(index) || index < 0 || index >= citas.length) {
         return res.status(404).json({ error: 'Cita no encontrada' });
     }
 
+    const turnoOcupado = citas.some((cita, idx) => idx !== index && cita.fecha === fecha && cita.hora === hora);
+    if (turnoOcupado) {
+        return res.status(409).json({ error: 'El turno ya está reservado para esta fecha' });
+    }
+
     citas[index] = {
         ...citas[index],
         nombre,
-        email,
         telefono,
         fecha,
         hora,

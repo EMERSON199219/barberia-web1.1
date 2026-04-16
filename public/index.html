@@ -61,7 +61,6 @@
         <h2>Reserva tu Cita</h2>
         <form class="form-cita">
             <input type="text" placeholder="Tu nombre" required>
-            <input type="email" placeholder="Tu email" required>
             <input type="tel" placeholder="Tu teléfono" required>
             <input type="date" required>
             <select required id="hora-select">
@@ -84,7 +83,8 @@
                     <option value="20:00">8:00 PM</option>
                 </optgroup>
             </select>
-            <select required>
+            <p id="availability-text" style="color: #ccc; font-size: 0.9rem; margin-top: 0.5rem;"></p>
+            <select required id="servicio-select">
                 <option value="">Selecciona un servicio</option>
                 <option value="corte_clasico">Corte Clásico - $15.000</option>
                 <option value="corte_barba">Corte + Barba - $20.000</option>
