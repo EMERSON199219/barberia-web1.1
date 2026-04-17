@@ -3,14 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barbería Premium - Cortes de Calidad</title>
+    <title>Barbería - Reservar Cita</title>
     <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
+    <!-- Selector de Barbería -->
+    <div class="barberia-selector" id="barberia-selector">
+        <label>Selecciona tu barbería:</label>
+        <div id="barberias-list" class="barberias-list"></div>
+    </div>
+
     <!-- Header -->
     <header>
         <nav class="navbar">
-            <h1>💈 Barbería Premium</h1>
+            <h1 id="barberia-titulo">💈 Barbería</h1>
             <ul class="nav-links">
                 <li><a href="#servicios">Servicios</a></li>
                 <li><a href="#citas">Citas</a></li>
@@ -59,10 +65,10 @@
     <!-- Formulario de Citas -->
     <section id="citas" class="citas">
         <h2>Reserva tu Cita</h2>
-        <form class="form-cita">
-            <input type="text" placeholder="Tu nombre" required>
-            <input type="tel" placeholder="Tu teléfono" required>
-            <input type="date" required>
+        <form class="formcita" id="formcita">
+            <input type="text" id="nombre" placeholder="Tu nombre" required>
+            <input type="tel" id="telefono" placeholder="Tu teléfono" required>
+            <input type="date" id="fecha" required>
             <select required id="hora-select">
                 <option value="">Selecciona una hora</option>
                 <optgroup label="Mañana">
@@ -91,17 +97,17 @@
                 <option value="cejas">Cejas - $5.000</option>
                 <option value="paquete_completo">Paquete Completo - $30.000</option>
             </select>
-            <textarea placeholder="Notas adicionales" rows="4"></textarea>
+            <textarea id="notas" placeholder="Notas adicionales" rows="4"></textarea>
             <button type="submit" class="btn-submit">Reservar</button>
         </form>
     </section>
 
     <!-- Footer -->
     <footer id="contacto">
-        <p>&copy; 2024 Barbería Premium. Todos los derechos reservados.</p>
-        <p>📍 Calle Principal 123 | 📞 +1 (555) 123-4567</p>
-    </footer>
-
-    <script src="js/script.js"></script>
+        <p>&copy; 2024 Barbería. Todos los derechos reservados.</p>
+        <footer>
+            <p>Ingeniero Emerson | esquivelrangelemerson37@gmail.com | Tel: 3225013710</p>
+        </footer>
 </body>
+<script src="js/script.js"></script>
 </html>

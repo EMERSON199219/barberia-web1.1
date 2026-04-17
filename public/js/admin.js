@@ -1,13 +1,18 @@
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 const loginForm = document.getElementById('login-form');
+const barberiaSelect = document.getElementById('barberia-select');
 const userInput = document.getElementById('admin-user');
 const passwordInput = document.getElementById('admin-password');
 const logoutBtn = document.getElementById('logout-btn');
 const citasTableBody = document.querySelector('#citas-table tbody');
 const noCitasMessage = document.getElementById('no-citas');
+const adminTitulo = document.getElementById('admin-titulo');
+const dashboardTitulo = document.getElementById('dashboard-titulo');
 
 const API_BASE = '/api';
+
+let currentBarberia = null;
 
 function getToken() {
     return sessionStorage.getItem('adminToken');
@@ -19,6 +24,25 @@ function setToken(token) {
 
 function clearToken() {
     sessionStorage.removeItem('adminToken');
+    sessionStorage.removeItem('barberiaData');
+}
+
+async function loadBarberias() {
+    try {
+        const response = await fetch(`${API_BASE}/barberias`);
+        const data = await response.json();
+        
+        barberiaSelect.innerHTML = '<option value="">Selecciona tu barbería</option>';
+        
+        data.barberias.forEach(b => {
+            const option = document.createElement('option');
+            option.value = b.id;
+            option.textContent = b.nombre;
+            barberiaSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error al cargar barberías:', error);
+    }
 }
 
 async function request(path, options = {}) {
@@ -55,7 +79,7 @@ async function renderCitas() {
 
         noCitasMessage.classList.add('hidden');
 
-        citas.forEach((cita, index) => {
+        citas.forEach((cita) => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${cita.nombre}</td>
@@ -66,9 +90,9 @@ async function renderCitas() {
                 <td>${cita.notas || '-'}</td>
                 <td>
                     <div class="admin-actions">
-                        <button class="edit-btn" data-index="${index}">Editar</button>
-                        <button class="reprogram-btn" data-index="${index}">Reprogramar</button>
-                        <button class="delete-btn" data-index="${index}">Cancelar</button>
+                        <button class="edit-btn" data-id="${cita.id}">Editar</button>
+                        <button class="reprogram-btn" data-id="${cita.id}">Reprogramar</button>
+                        <button class="delete-btn" data-id="${cita.id}">Cancelar</button>
                     </div>
                 </td>
             `;
@@ -83,6 +107,12 @@ async function renderCitas() {
 function showDashboard() {
     loginSection.classList.add('hidden');
     dashboardSection.classList.remove('hidden');
+    
+    if (currentBarberia) {
+        adminTitulo.textContent = `Admin - ${currentBarberia.nombre}`;
+        dashboardTitulo.textContent = `Reservas - ${currentBarberia.nombre}`;
+    }
+    
     renderCitas();
 }
 
@@ -90,22 +120,32 @@ function logout() {
     clearToken();
     loginSection.classList.remove('hidden');
     dashboardSection.classList.add('hidden');
+    adminTitulo.textContent = 'Panel Admin';
+    dashboardTitulo.textContent = 'Reservas actuales';
     loginForm.reset();
 }
 
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
+    const barberiaId = barberiaSelect.value;
     const username = userInput.value.trim();
     const password = passwordInput.value.trim();
 
+    if (!barberiaId) {
+        alert('Por favor, selecciona una barbería');
+        return;
+    }
+
     try {
-        const data = await request('/login', {
+        const data = await request('/barberia/login', {
             method: 'POST',
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ barberiaId, username, password }),
         });
 
         setToken(data.token);
+        currentBarberia = data.barberia;
+        sessionStorage.setItem('barberiaData', JSON.stringify(currentBarberia));
         showDashboard();
     } catch (error) {
         alert(error.message);
@@ -120,10 +160,11 @@ citasTableBody.addEventListener('click', async (e) => {
     const button = e.target.closest('button');
     if (!button) return;
 
-    const index = Number(button.dataset.index);
+    const citaId = button.dataset.id;
+    
     if (button.classList.contains('delete-btn')) {
         if (!confirm('¿Estás seguro de cancelar esta cita?')) return;
-        await request(`/citas/${index}`, { method: 'DELETE' });
+        await request(`/citas/${citaId}`, { method: 'DELETE' });
         renderCitas();
         return;
     }
@@ -133,24 +174,40 @@ citasTableBody.addEventListener('click', async (e) => {
         if (!nuevaFecha) return;
         const nuevaHora = prompt('Nueva hora (HH:MM):', '08:00');
         if (!nuevaHora) return;
-        await request(`/citas/${index}`, {
+        
+        // Obtener la cita actual para mantener los demas datos
+        const data = await request('/citas');
+        const cita = data.citas.find(c => c.id === citaId);
+        
+        await request(`/citas/${citaId}`, {
             method: 'PUT',
-            body: JSON.stringify({ fecha: nuevaFecha, hora: nuevaHora }),
+            body: JSON.stringify({ 
+                nombre: cita.nombre,
+                telefono: cita.telefono,
+                fecha: nuevaFecha, 
+                hora: nuevaHora,
+                servicio: cita.servicio,
+                notas: cita.notas
+            }),
         });
         renderCitas();
         return;
     }
 
     if (button.classList.contains('edit-btn')) {
-        const nombre = prompt('Nombre:');
+        // Obtener la cita actual
+        const data = await request('/citas');
+        const cita = data.citas.find(c => c.id === citaId);
+        
+        const nombre = prompt('Nombre:', cita.nombre);
         if (!nombre) return;
-        const telefono = prompt('Teléfono:');
+        const telefono = prompt('Teléfono:', cita.telefono);
         if (!telefono) return;
-        const servicio = prompt('Servicio:');
+        const servicio = prompt('Servicio:', cita.servicio);
         if (!servicio) return;
-        const notas = prompt('Notas:');
+        const notas = prompt('Notas:', cita.notas);
 
-        await request(`/citas/${index}`, {
+        await request(`/citas/${citaId}`, {
             method: 'PUT',
             body: JSON.stringify({ nombre, telefono, servicio, notas }),
         });
@@ -158,9 +215,5 @@ citasTableBody.addEventListener('click', async (e) => {
     }
 });
 
-window.addEventListener('DOMContentLoaded', () => {
-    const token = getToken();
-    if (token) {
-        showDashboard();
-    }
-});
+// Inicializar
+loadBarberias();

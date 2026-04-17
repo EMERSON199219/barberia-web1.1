@@ -1,9 +1,73 @@
-const formCita = document.querySelector('.form-cita');
+const formCita = document.getElementById('formcita');
 const horaSelect = document.getElementById('hora-select');
 const servicioSelect = document.getElementById('servicio-select');
-const dateInput = document.querySelector('input[type="date"]');
+const dateInput = document.getElementById('fecha');
 const availabilityText = document.getElementById('availability-text');
+const barberiasList = document.getElementById('barberias-list');
+const barberiaTitulo = document.getElementById('barberia-titulo');
 const API_BASE = '/api';
+
+let currentBarberiaId = null;
+let barberiasData = [];
+
+// Cargar barberías como íconos/botones
+async function loadBarberias() {
+    try {
+        const response = await fetch(`${API_BASE}/barberias`);
+        const data = await response.json();
+        barberiasData = data.barberias;
+        barberiasList.innerHTML = '';
+        if (barberiasData.length === 0) {
+            barberiasList.innerHTML = '<span style="color:#aaa">No hay barberías disponibles</span>';
+            return;
+        }
+        // Íconos por color o nombre
+        const icons = {
+            dorado: '💛', azul: '💙', rosado: '💖', verde: '💚', morado: '💜', rojo: '❤️', naranja: '🧡', blanco: '🤍',
+            default: '💈'
+        };
+        barberiasData.forEach(b => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'barberia-btn';
+            btn.dataset.id = b.id;
+            btn.innerHTML = `<span class="icon">${icons[b.color] || icons.default}</span><span>${b.nombre}</span>`;
+            btn.addEventListener('click', () => selectBarberiaBtn(b.id));
+            barberiasList.appendChild(btn);
+        });
+    } catch (error) {
+        console.error('Error al cargar barberías:', error);
+    }
+}
+
+
+// Selección de barbería por botón
+async function selectBarberiaBtn(barberiaId) {
+    currentBarberiaId = barberiaId;
+    // Quitar selección previa
+    document.querySelectorAll('.barberia-btn').forEach(btn => btn.classList.remove('selected'));
+    // Marcar seleccionada
+    const btn = document.querySelector(`.barberia-btn[data-id="${barberiaId}"]`);
+    if (btn) btn.classList.add('selected');
+    // Remover temas anteriores
+    document.body.classList.remove('barberia-rosado', 'barberia-dorado', 'barberia-azul', 'barberia-verde', 'barberia-morado', 'barberia-rojo', 'barberia-naranja', 'barberia-blanco');
+    // Obtener datos de la barbería para el color
+    try {
+        const response = await fetch(`${API_BASE}/barberias/${currentBarberiaId}`);
+        const data = await response.json();
+        if (data.barberia && data.barberia.color) {
+            document.body.classList.add(`barberia-${data.barberia.color}`);
+        }
+        barberiaTitulo.textContent = `💈 ${data.barberia ? data.barberia.nombre : 'Barbería'}`;
+    } catch (error) {
+        barberiaTitulo.textContent = '💈 Barbería';
+        console.warn('Error al obtener color de barbería:', error);
+    }
+    // Recargar turnos si hay fecha seleccionada
+    if (dateInput.value) {
+        loadBookedHours(dateInput.value);
+    }
+}
 
 function setAvailableTimes(bookedHours) {
     for (const option of horaSelect.options) {
@@ -34,13 +98,13 @@ function setAvailableTimes(bookedHours) {
 }
 
 async function loadBookedHours(date) {
-    if (!date) {
+    if (!date || !currentBarberiaId) {
         setAvailableTimes([]);
         return;
     }
 
     try {
-        const response = await fetch(`${API_BASE}/turnos?date=${encodeURIComponent(date)}`);
+        const response = await fetch(`${API_BASE}/turnos?barberiaId=${encodeURIComponent(currentBarberiaId)}&date=${encodeURIComponent(date)}`);
         if (!response.ok) {
             throw new Error('No se pudieron cargar los turnos ocupados');
         }
@@ -60,19 +124,24 @@ dateInput.addEventListener('change', () => {
 formCita.addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const nombre = this.querySelector('input[type="text"]').value.trim();
-    const telefono = this.querySelector('input[type="tel"]').value.trim();
-    const fecha = this.querySelector('input[type="date"]').value;
-    const hora = this.querySelector('#hora-select').value;
+    if (!currentBarberiaId) {
+        alert('Por favor, selecciona una barbería');
+        return;
+    }
+
+    const nombre = document.getElementById('nombre').value.trim();
+    const telefono = document.getElementById('telefono').value.trim();
+    const fecha = dateInput.value;
+    const hora = horaSelect.value;
     const servicio = servicioSelect.value;
-    const notas = this.querySelector('textarea').value.trim();
+    const notas = document.getElementById('notas').value.trim();
 
     if (!nombre || !telefono || !fecha || !hora || !servicio) {
         alert('Por favor, completa todos los campos requeridos');
         return;
     }
 
-    const cita = { nombre, telefono, fecha, hora, servicio, notas };
+    const cita = { barberiaId: currentBarberiaId, nombre, telefono, fecha, hora, servicio, notas };
 
     try {
         const response = await fetch(`${API_BASE}/citas`, {
@@ -97,32 +166,6 @@ formCita.addEventListener('submit', async function(e) {
     }
 });
 
-async function migrateLocalStorageCitas() {
-    const stored = localStorage.getItem('citas');
-    if (!stored) return;
-
-    const citas = JSON.parse(stored);
-    if (!Array.isArray(citas) || citas.length === 0) return;
-
-    for (const cita of citas) {
-        await fetch(`${API_BASE}/citas`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(cita)
-        });
-    }
-
-    localStorage.removeItem('citas');
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-    loadBookedHours('');
-    migrateLocalStorageCitas();
-    availabilityText.textContent = 'Selecciona una fecha para ver turnos disponibles';
-});
-
 // Scroll suave para los enlaces de navegación
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function(e) {
@@ -136,3 +179,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         }
     });
 });
+
+// Inicializar
+loadBarberias();
+availabilityText.textContent = 'Selecciona una barbería y fecha para ver turnos disponibles';

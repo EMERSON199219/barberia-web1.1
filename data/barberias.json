@@ -1,0 +1,20 @@
+[
+  {
+    "id": "8ff0895527085432",
+    "nombre": "FULL BARBER",
+    "username": "FULL",
+    "password": "barber123",
+    "color": "dorado",
+    "activa": true,
+    "fechaCreacion": "2026-04-17T13:30:48.072Z"
+  },
+  {
+    "id": "9c3decda5afaf28b",
+    "nombre": "barber2",
+    "username": "barber2",
+    "password": "Barber123",
+    "color": "naranja",
+    "activa": true,
+    "fechaCreacion": "2026-04-17T14:20:50.058Z"
+  }
+]

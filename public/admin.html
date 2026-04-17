@@ -3,34 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Barbería Premium</title>
+    <title>Admin - Barbería</title>
     <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
     <header>
         <nav class="navbar">
-            <h1>Panel Admin</h1>
+            <h1 id="admin-titulo">Panel Admin</h1>
             <ul class="nav-links">
                 <li><a href="index.html">Inicio</a></li>
                 <li><a href="admin.html">Reservas</a></li>
+                <li><a href="superadmin.html">Superadmin</a></li>
             </ul>
         </nav>
     </header>
 
     <main>
         <section class="admin-card" id="login-section">
-            <h2>Ingreso Administrador</h2>
+            <h2>Ingreso Barbería</h2>
             <form id="login-form">
+                <select id="barberia-select" required>
+                    <option value="">Selecciona tu barbería</option>
+                </select>
                 <input type="text" id="admin-user" placeholder="Usuario" required>
                 <input type="password" id="admin-password" placeholder="Contraseña" required>
                 <button type="submit">Ingresar</button>
             </form>
-            <p style="color: #aaa; margin-top: 1rem; font-size: 0.95rem;">Usuario: <strong>admin</strong> | Contraseña: <strong>barber123</strong></p>
         </section>
 
         <section class="admin-container hidden" id="dashboard-section">
             <div class="admin-header">
-                <h2>Reservas actuales</h2>
+                <h2 id="dashboard-titulo">Reservas actuales</h2>
                 <button id="logout-btn">Cerrar sesión</button>
             </div>
 
