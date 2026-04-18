@@ -35,6 +35,30 @@ const tokens = new Map();
 
 require('dotenv').config();
 
+// MongoDB Atlas
+const { MongoClient, ObjectId } = require('mongodb');
+const client = new MongoClient(process.env.MONGODB_URI);
+let db;
+let barberiasCollection;
+
+async function connectMongo() {
+    if (!db) {
+        await client.connect();
+        db = client.db('barberia'); // nombre de tu base de datos
+        barberiasCollection = db.collection('barberias');
+    }
+}
+
+// Middleware para asegurar conexión
+async function mongoMiddleware(req, res, next) {
+    try {
+        await connectMongo();
+        next();
+    } catch (err) {
+        res.status(500).json({ error: 'Error de conexión a la base de datos' });
+    }
+}
+
 // Utilidades para manejo de archivos locales
 function getBarberiasPath() {
     return BARBERIAS_FILE;
