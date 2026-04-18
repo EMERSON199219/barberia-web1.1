@@ -34,29 +34,14 @@ const SUPERADMIN_PASSWORD = 'superadmin123';
 const tokens = new Map();
 
 require('dotenv').config();
-const { MongoClient, ObjectId } = require('mongodb');
 
-// Conexión a MongoDB Atlas
-const client = new MongoClient(process.env.MONGODB_URI);
-let db;
-let barberiasCollection;
-
-async function connectMongo() {
-    if (!db) {
-        await client.connect();
-        db = client.db('barberia'); // nombre de tu base de datos
-        barberiasCollection = db.collection('barberias');
-    }
+// Utilidades para manejo de archivos locales
+function getBarberiasPath() {
+    return BARBERIAS_FILE;
 }
 
-// Middleware para asegurar conexión
-async function mongoMiddleware(req, res, next) {
-    try {
-        await connectMongo();
-        next();
-    } catch (err) {
-        res.status(500).json({ error: 'Error de conexión a la base de datos' });
-    }
+function getCitasPath(barberiaId) {
+    return path.join(DATA_DIR, barberiaId, 'citas.json');
 }
 
 app.use(express.json());
@@ -127,27 +112,28 @@ app.post('/api/superadmin/login', (req, res) => {
     res.status(401).json({ error: 'Credenciales incorrectas' });
 });
 
-// Login barbería (MongoDB)
-app.post('/api/barberia/login', mongoMiddleware, async (req, res) => {
+// Login barbería (archivos locales)
+app.post('/api/barberia/login', async (req, res) => {
     const { username, password, barberiaId } = req.body;
+    const barberias = await readJson(getBarberiasPath(), '[]');
     let barberia;
     if (barberiaId) {
-        barberia = await barberiasCollection.findOne({ _id: new ObjectId(barberiaId), activa: true });
+        barberia = barberias.find(b => b.id === barberiaId && b.activa);
     } else {
-        barberia = await barberiasCollection.findOne({ username, activa: true });
+        barberia = barberias.find(b => b.username === username && b.activa);
     }
     if (!barberia) {
         return res.status(404).json({ error: 'Barbería no encontrada o inactiva' });
     }
     if (barberia.username === username && barberia.password === password) {
         const token = crypto.randomBytes(24).toString('hex');
-        tokens.set(token, { barberiaId: barberia._id.toString(), role: 'admin' });
-        return res.json({ 
-            token, 
-            role: 'admin', 
-            barberia: { 
-                id: barberia._id.toString(), 
-                nombre: barberia.nombre 
+        tokens.set(token, { barberiaId: barberia.id, role: 'admin' });
+        return res.json({
+            token,
+            role: 'admin',
+            barberia: {
+                id: barberia.id,
+                nombre: barberia.nombre
             }
         });
     }
@@ -164,12 +150,12 @@ app.post('/api/logout', authMiddleware, (req, res) => {
 
 // ==================== SUPERADMIN ====================
 
-// Obtener todas las barberías (MongoDB)
-app.get('/api/superadmin/barberias', authMiddleware, superadminMiddleware, mongoMiddleware, async (req, res) => {
-    const barberias = await barberiasCollection.find({}).toArray();
+// Obtener todas las barberías (archivos locales)
+app.get('/api/superadmin/barberias', authMiddleware, superadminMiddleware, async (req, res) => {
+    const barberias = await readJson(getBarberiasPath(), '[]');
     // No devolver contraseñas
     const safeBarberias = barberias.map(b => ({
-        id: b._id.toString(),
+        id: b.id,
         nombre: b.nombre,
         username: b.username,
         color: b.color,
@@ -181,8 +167,8 @@ app.get('/api/superadmin/barberias', authMiddleware, superadminMiddleware, mongo
     res.json({ barberias: safeBarberias });
 });
 
-// Crear barbería (MongoDB)
-app.post('/api/superadmin/barberias', authMiddleware, superadminMiddleware, mongoMiddleware, upload.single('logo'), async (req, res) => {
+// Crear barbería (archivos locales)
+app.post('/api/superadmin/barberias', authMiddleware, superadminMiddleware, upload.single('logo'), async (req, res) => {
     const { nombre, username, password, color } = req.body;
     let barberos = [];
     if (req.body.barberos) {
@@ -199,12 +185,14 @@ app.post('/api/superadmin/barberias', authMiddleware, superadminMiddleware, mong
     if (!nombre || !username || !password) {
         return res.status(400).json({ error: 'Faltan campos obligatorios' });
     }
+    const barberias = await readJson(getBarberiasPath(), '[]');
     // Verificar que no exista el username
-    const existe = await barberiasCollection.findOne({ username });
+    const existe = barberias.find(b => b.username === username);
     if (existe) {
         return res.status(409).json({ error: 'El usuario ya existe' });
     }
     const nuevaBarberia = {
+        id: crypto.randomBytes(12).toString('hex'),
         nombre,
         username,
         password, // En producción, hashear esto
@@ -214,15 +202,16 @@ app.post('/api/superadmin/barberias', authMiddleware, superadminMiddleware, mong
         logoUrl,
         barberos
     };
-    const result = await barberiasCollection.insertOne(nuevaBarberia);
-    res.status(201).json({ 
-        message: 'Barbería creada', 
-        barberia: { id: result.insertedId.toString(), ...nuevaBarberia }
+    barberias.push(nuevaBarberia);
+    await writeJson(getBarberiasPath(), barberias);
+    res.status(201).json({
+        message: 'Barbería creada',
+        barberia: nuevaBarberia
     });
 });
 
-// Editar barbería (MongoDB)
-app.put('/api/superadmin/barberias/:id', authMiddleware, superadminMiddleware, mongoMiddleware, upload.single('logo'), async (req, res) => {
+// Editar barbería (archivos locales)
+app.put('/api/superadmin/barberias/:id', authMiddleware, superadminMiddleware, upload.single('logo'), async (req, res) => {
     const { id } = req.params;
     const { nombre, username, password, activa, color } = req.body;
     let barberos = [];
@@ -237,84 +226,81 @@ app.put('/api/superadmin/barberias/:id', authMiddleware, superadminMiddleware, m
     if (req.file) {
         logoUrl = `/logos/${req.file.filename}`;
     }
-    // Verificar username único si se cambia
-    if (username) {
-        const existe = await barberiasCollection.findOne({ username, _id: { $ne: new ObjectId(id) } });
-        if (existe) {
-            return res.status(409).json({ error: 'El usuario ya existe' });
-        }
-    }
-    const update = {};
-    if (nombre) update.nombre = nombre;
-    if (username) update.username = username;
-    if (password) update.password = password;
-    if (typeof activa !== 'undefined') update.activa = activa === 'true' || activa === true;
-    if (color) update.color = color;
-    if (logoUrl) update.logoUrl = logoUrl;
-    update.barberos = barberos;
-    const result = await barberiasCollection.findOneAndUpdate(
-        { _id: new ObjectId(id) },
-        { $set: update },
-        { returnDocument: 'after' }
-    );
-    if (!result.value) {
+    const barberias = await readJson(getBarberiasPath(), '[]');
+    const index = barberias.findIndex(b => b.id === id);
+    if (index === -1) {
         return res.status(404).json({ error: 'Barbería no encontrada' });
     }
-    res.json({ message: 'Barbería actualizada', barberia: { id: result.value._id.toString(), ...result.value } });
+    // Verificar username único si se cambia
+    if (username && barberias.some(b => b.username === username && b.id !== id)) {
+        return res.status(409).json({ error: 'El usuario ya existe' });
+    }
+    if (nombre) barberias[index].nombre = nombre;
+    if (username) barberias[index].username = username;
+    if (password) barberias[index].password = password;
+    if (typeof activa !== 'undefined') barberias[index].activa = activa === 'true' || activa === true;
+    if (color) barberias[index].color = color;
+    if (logoUrl) barberias[index].logoUrl = logoUrl;
+    barberias[index].barberos = barberos;
+    await writeJson(getBarberiasPath(), barberias);
+    res.json({ message: 'Barbería actualizada', barberia: barberias[index] });
 });
 
-// Eliminar barbería (MongoDB)
-app.delete('/api/superadmin/barberias/:id', authMiddleware, superadminMiddleware, mongoMiddleware, async (req, res) => {
+// Eliminar barbería (archivos locales)
+app.delete('/api/superadmin/barberias/:id', authMiddleware, superadminMiddleware, async (req, res) => {
     const { id } = req.params;
-    const result = await barberiasCollection.deleteOne({ _id: new ObjectId(id) });
-    if (result.deletedCount === 0) {
+    const barberias = await readJson(getBarberiasPath(), '[]');
+    const index = barberias.findIndex(b => b.id === id);
+    if (index === -1) {
         return res.status(404).json({ error: 'Barbería no encontrada' });
     }
+    barberias.splice(index, 1);
+    await writeJson(getBarberiasPath(), barberias);
     res.json({ message: 'Barbería eliminada' });
 });
 
 // ==================== BARBERÍAS (PÚBLICO) ====================
 
-// Listar barberías activas (para selector, MongoDB)
-app.get('/api/barberias', mongoMiddleware, async (req, res) => {
-    const barberias = await barberiasCollection.find({ activa: true }).toArray();
-    const activas = barberias.map(b => ({ id: b._id.toString(), nombre: b.nombre }));
+// Listar barberías activas (archivos locales)
+app.get('/api/barberias', async (req, res) => {
+    const barberias = await readJson(getBarberiasPath(), '[]');
+    const activas = barberias.filter(b => b.activa).map(b => ({ id: b.id, nombre: b.nombre }));
     res.json({ barberias: activas });
 });
 
-// Obtener info de una barbería (MongoDB)
-app.get('/api/barberias/:id', mongoMiddleware, async (req, res) => {
+// Obtener info de una barbería (archivos locales)
+app.get('/api/barberias/:id', async (req, res) => {
     const { id } = req.params;
-    const barberia = await barberiasCollection.findOne({ _id: new ObjectId(id), activa: true });
+    const barberias = await readJson(getBarberiasPath(), '[]');
+    const barberia = barberias.find(b => b.id === id && b.activa);
     if (!barberia) {
         return res.status(404).json({ error: 'Barbería no encontrada' });
     }
-    res.json({ barberia: { id: barberia._id.toString(), nombre: barberia.nombre, color: barberia.color } });
+    res.json({ barberia: { id: barberia.id, nombre: barberia.nombre, color: barberia.color } });
 });
 
-// ==================== CITAS (MongoDB) ====================
-
-function getCitasCollection(barberiaId) {
-    return db.collection(`citas_${barberiaId}`);
-}
+// ==================== CITAS (archivos locales) ====================
 
 // Crear cita (público - requiere barberiaId)
-app.post('/api/citas', mongoMiddleware, async (req, res) => {
+app.post('/api/citas', async (req, res) => {
     const { barberiaId, nombre, telefono, fecha, hora, servicio, notas } = req.body;
     if (!barberiaId || !nombre || !telefono || !fecha || !hora || !servicio) {
         return res.status(400).json({ error: 'Faltan campos obligatorios' });
     }
     // Verificar que la barbería existe y está activa
-    const barberia = await barberiasCollection.findOne({ _id: new ObjectId(barberiaId), activa: true });
+    const barberias = await readJson(getBarberiasPath(), '[]');
+    const barberia = barberias.find(b => b.id === barberiaId && b.activa);
     if (!barberia) {
         return res.status(404).json({ error: 'Barbería no encontrada o inactiva' });
     }
-    const citasCol = getCitasCollection(barberiaId);
-    const turnoOcupado = await citasCol.findOne({ fecha, hora });
+    const citasPath = getCitasPath(barberiaId);
+    const citas = await readJson(citasPath, '[]');
+    const turnoOcupado = citas.find(c => c.fecha === fecha && c.hora === hora);
     if (turnoOcupado) {
         return res.status(409).json({ error: 'El turno ya está reservado para esta fecha' });
     }
     const cita = {
+        id: crypto.randomBytes(12).toString('hex'),
         nombre,
         telefono,
         fecha,
@@ -323,18 +309,19 @@ app.post('/api/citas', mongoMiddleware, async (req, res) => {
         notas,
         fechaCreacion: new Date().toISOString()
     };
-    const result = await citasCol.insertOne(cita);
-    res.status(201).json({ message: 'Cita reservada', cita: { id: result.insertedId.toString(), ...cita } });
+    citas.push(cita);
+    await writeJson(citasPath, citas);
+    res.status(201).json({ message: 'Cita reservada', cita });
 });
 
-// Obtener turnos ocupados (público, MongoDB)
-app.get('/api/turnos', mongoMiddleware, async (req, res) => {
+// Obtener turnos ocupados (archivos locales)
+app.get('/api/turnos', async (req, res) => {
     const { barberiaId, date } = req.query;
     if (!barberiaId || !date) {
         return res.status(400).json({ error: 'Faltan parámetros' });
     }
-    const citasCol = getCitasCollection(barberiaId);
-    const turnos = await citasCol.find({ fecha: date }).toArray();
+    const citasPath = getCitasPath(barberiaId);
+    const turnos = (await readJson(citasPath, '[]')).filter(c => c.fecha === date);
     res.json({ turnos });
 });
 
