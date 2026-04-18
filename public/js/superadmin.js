@@ -57,14 +57,18 @@ async function renderBarberias() {
         }
 
         barberias.forEach(barberia => {
-            const colorEmoji = {
-                rosado: '💈', dorado: '✨', azul: '🔵', verde: '🟢',
+            const colorEmoji = { rosado: '💈', dorado: '✨', azul: '🔵', verde: '🟢',
                 morado: '🟣', rojo: '🔴', naranja: '🟠', blanco: '⚪'
             };
             const card = document.createElement('div');
             card.className = 'barberia-card';
+            let logoHtml = '';
+            if (barberia.logoUrl) {
+                logoHtml = `<img src="${barberia.logoUrl}" alt="Logo" style="width:60px;height:60px;object-fit:cover;border-radius:8px;margin-bottom:0.5rem;">`;
+            }
             card.innerHTML = `
                 <div class="barberia-info">
+                    ${logoHtml}
                     <h3>${colorEmoji[barberia.color] || '💈'} ${barberia.nombre}</h3>
                     <p>Usuario: ${barberia.username}</p>
                     <p>Color: ${barberia.color || 'rosado'}</p>
@@ -100,6 +104,48 @@ function logout() {
     loginForm.reset();
 }
 
+// --- Gestión de barberos en el formulario ---
+let barberosTemp = [];
+
+function renderBarberosList() {
+    const barberosList = document.getElementById('barberos-list');
+    barberosList.innerHTML = '';
+    if (barberosTemp.length === 0) {
+        barberosList.innerHTML = '<p style="color:#aaa;font-size:0.9rem;">Sin barberos agregados</p>';
+        return;
+    }
+    barberosTemp.forEach((barbero, idx) => {
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.gap = '0.5rem';
+        div.style.marginBottom = '0.25rem';
+        div.innerHTML = `
+            <span>${barbero}</span>
+            <button type="button" class="btn btn-eliminar-barbero" data-idx="${idx}" style="background:#e74c3c;padding:0 8px;">X</button>
+        `;
+        barberosList.appendChild(div);
+    });
+}
+
+document.getElementById('agregar-barbero-btn').addEventListener('click', () => {
+    const input = document.getElementById('nuevo-barbero');
+    const nombre = input.value.trim();
+    if (nombre && !barberosTemp.includes(nombre)) {
+        barberosTemp.push(nombre);
+        input.value = '';
+        renderBarberosList();
+    }
+});
+
+document.getElementById('barberos-list').addEventListener('click', (e) => {
+    if (e.target.classList.contains('btn-eliminar-barbero')) {
+        const idx = parseInt(e.target.dataset.idx);
+        barberosTemp.splice(idx, 1);
+        renderBarberosList();
+    }
+});
+
 function abrirModal(barberia = null) {
     if (barberia) {
         modalTitulo.textContent = 'Editar Barbería';
@@ -108,18 +154,23 @@ function abrirModal(barberia = null) {
         document.getElementById('barberia-user').value = barberia.username;
         document.getElementById('barberia-password').value = '';
         document.getElementById('barberia-color').value = barberia.color || 'rosado';
+        barberosTemp = Array.isArray(barberia.barberos) ? [...barberia.barberos] : [];
     } else {
         modalTitulo.textContent = 'Nueva Barbería';
         barberiaForm.reset();
         document.getElementById('barberia-id').value = '';
         document.getElementById('barberia-color').value = 'rosado';
+        barberosTemp = [];
     }
+    renderBarberosList();
     barberiaModal.classList.add('active');
 }
 
 function cerrarModal() {
     barberiaModal.classList.remove('active');
     barberiaForm.reset();
+    barberosTemp = [];
+    renderBarberosList();
 }
 
 loginForm.addEventListener('submit', async (e) => {
@@ -157,6 +208,8 @@ barberiaForm.addEventListener('submit', async (e) => {
     const username = document.getElementById('barberia-user').value.trim();
     const password = document.getElementById('barberia-password').value;
     const color = document.getElementById('barberia-color').value;
+    const logoInput = document.getElementById('barberia-logo');
+    const logoFile = logoInput.files[0];
 
     if (!nombre || !username) {
         alert('Por favor, completa los campos requeridos');
@@ -164,13 +217,21 @@ barberiaForm.addEventListener('submit', async (e) => {
     }
 
     try {
+        const formData = new FormData();
+        formData.append('nombre', nombre);
+        formData.append('username', username);
+        formData.append('color', color);
+        if (logoFile) formData.append('logo', logoFile);
+        formData.append('barberos', JSON.stringify(barberosTemp));
         if (id) {
             // Editar
-            const body = { nombre, username, color };
-            if (password) body.password = password;
-            await request(`/superadmin/barberias/${id}`, {
+            if (password) formData.append('password', password);
+            await fetch(`${API_BASE}/superadmin/barberias/${id}`, {
                 method: 'PUT',
-                body: JSON.stringify(body),
+                headers: {
+                    'Authorization': `Bearer ${getToken()}`
+                },
+                body: formData
             });
         } else {
             // Crear
@@ -178,9 +239,13 @@ barberiaForm.addEventListener('submit', async (e) => {
                 alert('La contraseña es requerida para nuevas barberías');
                 return;
             }
-            await request('/superadmin/barberias', {
+            formData.append('password', password);
+            await fetch(`${API_BASE}/superadmin/barberias`, {
                 method: 'POST',
-                body: JSON.stringify({ nombre, username, password, color }),
+                headers: {
+                    'Authorization': `Bearer ${getToken()}`
+                },
+                body: formData
             });
         }
         cerrarModal();

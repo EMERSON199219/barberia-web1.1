@@ -2,7 +2,25 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
+const multer = require('multer');
 const app = express();
+// Configuración de almacenamiento para logos
+const LOGOS_DIR = path.join(__dirname, 'public', 'logos');
+const storage = multer.diskStorage({
+    destination: async function (req, file, cb) {
+        await ensureDir(LOGOS_DIR);
+        cb(null, LOGOS_DIR);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+    }
+});
+const upload = multer({ storage });
+
+// Servir logos como archivos estáticos
+app.use('/logos', express.static(LOGOS_DIR));
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
@@ -130,26 +148,36 @@ app.get('/api/superadmin/barberias', authMiddleware, superadminMiddleware, async
         username: b.username,
         color: b.color,
         activa: b.activa,
-        fechaCreacion: b.fechaCreacion
+        fechaCreacion: b.fechaCreacion,
+        logoUrl: b.logoUrl || null,
+        barberos: b.barberos || []
     }));
     res.json({ barberias: safeBarberias });
 });
 
 // Crear barbería
-app.post('/api/superadmin/barberias', authMiddleware, superadminMiddleware, async (req, res) => {
+app.post('/api/superadmin/barberias', authMiddleware, superadminMiddleware, upload.single('logo'), async (req, res) => {
     const { nombre, username, password, color } = req.body;
-    
+    let barberos = [];
+    if (req.body.barberos) {
+        try {
+            barberos = JSON.parse(req.body.barberos);
+        } catch (e) {
+            barberos = [];
+        }
+    }
+    let logoUrl = null;
+    if (req.file) {
+        logoUrl = `/logos/${req.file.filename}`;
+    }
     if (!nombre || !username || !password) {
         return res.status(400).json({ error: 'Faltan campos obligatorios' });
     }
-    
     const barberias = await readJson(BARBERIAS_FILE, '[]');
-    
     // Verificar que no exista el username
     if (barberias.some(b => b.username === username)) {
         return res.status(409).json({ error: 'El usuario ya existe' });
     }
-    
     const nuevaBarberia = {
         id: crypto.randomBytes(8).toString('hex'),
         nombre,
@@ -157,48 +185,55 @@ app.post('/api/superadmin/barberias', authMiddleware, superadminMiddleware, asyn
         password, // En producción, hashear esto
         color: color || 'rosado',
         activa: true,
-        fechaCreacion: new Date().toISOString()
+        fechaCreacion: new Date().toISOString(),
+        logoUrl,
+        barberos
     };
-    
     barberias.push(nuevaBarberia);
     await writeJson(BARBERIAS_FILE, barberias);
-    
     // Crear directorio para citas de esta barbería
     const barberiaDir = path.join(DATA_DIR, nuevaBarberia.id);
     await ensureDir(barberiaDir);
     await writeJson(path.join(barberiaDir, 'citas.json'), []);
-    
     res.status(201).json({ 
         message: 'Barbería creada', 
-        barberia: { id: nuevaBarberia.id, nombre: nuevaBarberia.nombre, activa: nuevaBarberia.activa, color: nuevaBarberia.color }
+        barberia: { id: nuevaBarberia.id, nombre: nuevaBarberia.nombre, activa: nuevaBarberia.activa, color: nuevaBarberia.color, logoUrl: nuevaBarberia.logoUrl, barberos: nuevaBarberia.barberos }
     });
 });
 
 // Editar barbería
-app.put('/api/superadmin/barberias/:id', authMiddleware, superadminMiddleware, async (req, res) => {
+app.put('/api/superadmin/barberias/:id', authMiddleware, superadminMiddleware, upload.single('logo'), async (req, res) => {
     const { id } = req.params;
     const { nombre, username, password, activa, color } = req.body;
-    
+    let barberos = [];
+    if (req.body.barberos) {
+        try {
+            barberos = JSON.parse(req.body.barberos);
+        } catch (e) {
+            barberos = [];
+        }
+    }
+    let logoUrl = null;
+    if (req.file) {
+        logoUrl = `/logos/${req.file.filename}`;
+    }
     const barberias = await readJson(BARBERIAS_FILE, '[]');
     const index = barberias.findIndex(b => b.id === id);
-    
     if (index === -1) {
         return res.status(404).json({ error: 'Barbería no encontrada' });
     }
-    
     // Verificar username único si se cambia
     if (username && barberias.some(b => b.username === username && b.id !== id)) {
         return res.status(409).json({ error: 'El usuario ya existe' });
     }
-    
     if (nombre) barberias[index].nombre = nombre;
     if (username) barberias[index].username = username;
     if (password) barberias[index].password = password;
     if (typeof activa === 'boolean') barberias[index].activa = activa;
     if (color) barberias[index].color = color;
-    
+    if (logoUrl) barberias[index].logoUrl = logoUrl;
+    barberias[index].barberos = barberos;
     await writeJson(BARBERIAS_FILE, barberias);
-    
     res.json({ message: 'Barbería actualizada', barberia: barberias[index] });
 });
 

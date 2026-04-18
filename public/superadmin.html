@@ -78,6 +78,17 @@
                     <option value="naranja">🟠 Naranja</option>
                     <option value="blanco">⚪ Blanco</option>
                 </select>
+                <label style="display: block; margin-bottom: 0.5rem; color: #aaa;">Logo de la barbería:</label>
+                <input type="file" id="barberia-logo" accept="image/*" style="margin-bottom: 1rem; background: #0f0f0f; color: #fff; border: 1px solid #333; border-radius: 5px;">
+
+                <div id="barberos-section" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: #aaa;">Barberos de la barbería:</label>
+                    <div id="barberos-list"></div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="text" id="nuevo-barbero" placeholder="Nombre del barbero" style="flex:1;">
+                        <button type="button" id="agregar-barbero-btn" class="btn">Agregar</button>
+                    </div>
+                </div>
                 <div class="modal-buttons">
                     <button type="button" class="btn" onclick="cerrarModal()">Cancelar</button>
                     <button type="submit" class="btn">Guardar</button>
