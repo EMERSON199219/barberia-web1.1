@@ -7,66 +7,53 @@ const availabilityText = document.getElementById('availability-text');
 const barberiasList = document.getElementById('barberias-list');
 const barberiaTitulo = document.getElementById('barberia-titulo');
 const selectedBarberia = document.getElementById('selected-barberia');
-const API_BASE = '/api';
 
-let currentBarberiaId = null;
-let barberiasData = [];
-let currentBarberos = [];
+const STATIC_BARBERIA = {
+    id: 'full-barber',
+    nombre: 'FULL BARBER',
+    color: 'rosado',
+    logoUrl: '/logos/logo-1777050721470-291941272.jpg',
+    barberos: [
+        { nombre: 'juan', horario: 'Horario no definido' },
+        { nombre: 'pedro', horario: 'Horario no definido' }
+    ]
+};
 
-// Cargar barberías como íconos/botones
+let currentBarberiaId = STATIC_BARBERIA.id;
+let barberiasData = [STATIC_BARBERIA];
+let currentBarberos = STATIC_BARBERIA.barberos;
+
+// Cargar una sola barbería estática
 async function loadBarberias() {
-    try {
-        const response = await fetch(`${API_BASE}/barberias`);
-        const data = await response.json();
-        barberiasData = data.barberias;
-        barberiasList.innerHTML = '';
-        if (barberiasData.length === 0) {
-            barberiasList.innerHTML = '<span style="color:#aaa">No hay barberías disponibles</span>';
-            return;
-        }
-        // Íconos por color o nombre
-        const icons = {
-            dorado: '💛', azul: '💙', rosado: '💖', verde: '💚', morado: '💜', rojo: '❤️', naranja: '🧡', blanco: '🤍',
-            default: '💈'
-        };
-        barberiasData.forEach(b => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'barberia-btn';
-            btn.dataset.id = b.id;
-            btn.innerHTML = `<span class="icon">${icons[b.color] || icons.default}</span><span>${b.nombre}</span>`;
-            btn.addEventListener('click', () => selectBarberiaBtn(b.id));
-            barberiasList.appendChild(btn);
-        });
-    } catch (error) {
-        console.error('Error al cargar barberías:', error);
-    }
+    barberiasList.innerHTML = '';
+    const icons = {
+        dorado: '💛', azul: '💙', rosado: '💖', verde: '💚', morado: '💜', rojo: '❤️', naranja: '🧡', blanco: '🤍',
+        default: '💈'
+    };
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'barberia-btn selected';
+    btn.dataset.id = STATIC_BARBERIA.id;
+    btn.innerHTML = `<span class="icon">${icons[STATIC_BARBERIA.color] || icons.default}</span><span>${STATIC_BARBERIA.nombre}</span>`;
+    btn.addEventListener('click', () => selectBarberiaBtn(STATIC_BARBERIA.id));
+    barberiasList.appendChild(btn);
+    selectBarberiaBtn(STATIC_BARBERIA.id);
 }
 
 
 // Selección de barbería por botón
 async function selectBarberiaBtn(barberiaId) {
     currentBarberiaId = barberiaId;
-    // Quitar selección previa
     document.querySelectorAll('.barberia-btn').forEach(btn => btn.classList.remove('selected'));
-    // Marcar seleccionada
     const btn = document.querySelector(`.barberia-btn[data-id="${barberiaId}"]`);
     if (btn) btn.classList.add('selected');
-    // Remover temas anteriores
     document.body.classList.remove('barberia-rosado', 'barberia-dorado', 'barberia-azul', 'barberia-verde', 'barberia-morado', 'barberia-rojo', 'barberia-naranja', 'barberia-blanco');
-    // Obtener datos de la barbería para el color
-    try {
-        const response = await fetch(`${API_BASE}/barberias/${currentBarberiaId}`);
-        const data = await response.json();
-        if (data.barberia && data.barberia.color) {
-            document.body.classList.add(`barberia-${data.barberia.color}`);
-        }
-        renderBarberoOptions(data.barberia ? data.barberia.barberos || [] : []);
-    } catch (error) {
-        renderBarberoOptions([]);
-        console.warn('Error al obtener color de barbería:', error);
+    const barberia = barberiasData.find(b => b.id === barberiaId) || STATIC_BARBERIA;
+    if (barberia.color) {
+        document.body.classList.add(`barberia-${barberia.color}`);
     }
-    // Recargar turnos si hay fecha seleccionada
+    renderSelectedBarberia(barberia);
+    renderBarberoOptions(barberia.barberos || []);
     if (dateInput.value) {
         loadBookedHours(dateInput.value);
     }
@@ -148,26 +135,37 @@ function setAvailableTimes(bookedHours) {
     availabilityText.textContent = text;
 }
 
-async function loadBookedHours(date) {
+function getStoredBookings() {
+    try {
+        return JSON.parse(localStorage.getItem('staticCitas') || '[]');
+    } catch (error) {
+        return [];
+    }
+}
+
+function saveBooking(cita) {
+    const bookings = getStoredBookings();
+    bookings.push(cita);
+    localStorage.setItem('staticCitas', JSON.stringify(bookings));
+}
+
+function loadBookedHours(date) {
     if (!date || !currentBarberiaId) {
         setAvailableTimes([]);
         return;
     }
 
-    try {
-        const selectedBarbero = barberoSelect.value ? currentBarberos[parseInt(barberoSelect.value, 10)] : null;
-        const barberoQuery = selectedBarbero ? `&barbero=${encodeURIComponent(selectedBarbero.nombre || selectedBarbero)}` : '';
-        const response = await fetch(`${API_BASE}/turnos?barberiaId=${encodeURIComponent(currentBarberiaId)}&date=${encodeURIComponent(date)}${barberoQuery}`);
-        if (!response.ok) {
-            throw new Error('No se pudieron cargar los turnos ocupados');
-        }
-
-        const data = await response.json();
-        setAvailableTimes((data.turnos || []).map(turno => turno.hora));
-    } catch (error) {
-        console.warn(error.message);
+    const selectedBarbero = barberoSelect.value ? currentBarberos[parseInt(barberoSelect.value, 10)] : null;
+    if (!selectedBarbero) {
         setAvailableTimes([]);
+        return;
     }
+
+    const bookedHours = getStoredBookings()
+        .filter(b => b.barberiaId === currentBarberiaId && b.fecha === date && (typeof b.barbero === 'string' ? b.barbero === selectedBarbero.nombre : b.barbero.nombre === selectedBarbero.nombre))
+        .map(b => b.hora);
+
+    setAvailableTimes(bookedHours);
 }
 
 dateInput.addEventListener('change', () => {
@@ -180,7 +178,7 @@ barberoSelect.addEventListener('change', () => {
     }
 });
 
-formCita.addEventListener('submit', async function(e) {
+formCita.addEventListener('submit', function(e) {
     e.preventDefault();
 
     if (!currentBarberiaId) {
@@ -218,27 +216,10 @@ formCita.addEventListener('submit', async function(e) {
         notas
     };
 
-    try {
-        const response = await fetch(`${API_BASE}/citas`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(cita)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Error al reservar la cita');
-        }
-
-        const result = await response.json();
-        alert(`¡Reserva con éxito!\n\nNombre: ${result.cita.nombre}\nFecha: ${result.cita.fecha}\nHora: ${result.cita.hora}`);
-        this.reset();
-        loadBookedHours(dateInput.value);
-    } catch (error) {
-        alert(error.message);
-    }
+    saveBooking(cita);
+    alert(`¡Reserva guardada!\n\nNombre: ${cita.nombre}\nFecha: ${cita.fecha}\nHora: ${cita.hora}`);
+    this.reset();
+    loadBookedHours(fecha);
 });
 
 // Scroll suave para los enlaces de navegación
