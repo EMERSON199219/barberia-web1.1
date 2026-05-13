@@ -9,6 +9,7 @@
 <body>
     <!-- Selector de Barbería -->
     <div class="barberia-selector" id="barberia-selector">
+        <div id="selected-barberia" class="selected-barberia hidden"></div>
         <label>Selecciona tu barbería:</label>
         <div id="barberias-list" class="barberias-list"></div>
     </div>
@@ -69,6 +70,9 @@
             <input type="text" id="nombre" placeholder="Tu nombre" required>
             <input type="tel" id="telefono" placeholder="Tu teléfono" required>
             <input type="date" id="fecha" required>
+            <select required id="barbero-select">
+                <option value="">Selecciona un barbero</option>
+            </select>
             <select required id="hora-select">
                 <option value="">Selecciona una hora</option>
                 <optgroup label="Mañana">

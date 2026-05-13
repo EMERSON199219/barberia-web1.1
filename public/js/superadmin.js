@@ -64,16 +64,27 @@ async function renderBarberias() {
             card.className = 'barberia-card';
             let logoHtml = '';
             if (barberia.logoUrl) {
-                logoHtml = `<img src="${barberia.logoUrl}" alt="Logo" style="width:60px;height:60px;object-fit:cover;border-radius:8px;margin-bottom:0.5rem;">`;
+                logoHtml = `<img src="${barberia.logoUrl}" alt="Logo de ${barberia.nombre}">`;
             }
+            const barberosHtml = (barberia.barberos || []).map(barbero => {
+                const nombre = typeof barbero === 'string' ? barbero : barbero.nombre || '';
+                const horario = typeof barbero === 'string' ? '' : barbero.horario || '';
+                return `<div class="barbero-item"><strong>${nombre}</strong><span>${horario || 'Horario no definido'}</span></div>`;
+            }).join('');
             card.innerHTML = `
-                <div class="barberia-info">
+                <div class="barberia-card-top">
                     ${logoHtml}
                     <h3>${colorEmoji[barberia.color] || '💈'} ${barberia.nombre}</h3>
+                </div>
+                <div class="barberia-info">
                     <p>Usuario: ${barberia.username}</p>
                     <p>Color: ${barberia.color || 'rosado'}</p>
                     <p>Estado: ${barberia.activa ? '✅ Activa' : '❌ Inactiva'}</p>
                     <p>Creada: ${new Date(barberia.fechaCreacion).toLocaleDateString()}</p>
+                    <div class="barbero-list">
+                        <h4>Barberos</h4>
+                        ${barberosHtml || '<p style="color:#aaa;margin:0.25rem 0;">Sin barberos asignados</p>'}
+                    </div>
                 </div>
                 <div class="barberia-actions">
                     <button class="btn btn-editar" data-id="${barberia.id}">Editar</button>
@@ -115,13 +126,19 @@ function renderBarberosList() {
         return;
     }
     barberosTemp.forEach((barbero, idx) => {
+        const nombre = typeof barbero === 'string' ? barbero : barbero.nombre || '';
+        const horario = typeof barbero === 'string' ? '' : barbero.horario || '';
         const div = document.createElement('div');
         div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
         div.style.alignItems = 'center';
         div.style.gap = '0.5rem';
         div.style.marginBottom = '0.25rem';
         div.innerHTML = `
-            <span>${barbero}</span>
+            <div style="display:flex; flex-direction:column; gap:0.15rem;">
+                <strong>${nombre}</strong>
+                <small style="color:#aaa;">${horario || 'Horario no definido'}</small>
+            </div>
             <button type="button" class="btn btn-eliminar-barbero" data-idx="${idx}" style="background:#e74c3c;padding:0 8px;">X</button>
         `;
         barberosList.appendChild(div);
@@ -129,13 +146,22 @@ function renderBarberosList() {
 }
 
 document.getElementById('agregar-barbero-btn').addEventListener('click', () => {
-    const input = document.getElementById('nuevo-barbero');
-    const nombre = input.value.trim();
-    if (nombre && !barberosTemp.includes(nombre)) {
-        barberosTemp.push(nombre);
-        input.value = '';
-        renderBarberosList();
+    const nombreInput = document.getElementById('nuevo-barbero');
+    const horarioInput = document.getElementById('barbero-horario');
+    const nombre = nombreInput.value.trim();
+    const horario = horarioInput.value.trim();
+    if (!nombre) {
+        alert('Ingresa el nombre del barbero');
+        return;
     }
+    if (barberosTemp.some(b => (typeof b === 'string' ? b : b.nombre) === nombre)) {
+        alert('Este barbero ya está agregado');
+        return;
+    }
+    barberosTemp.push({ nombre, horario });
+    nombreInput.value = '';
+    horarioInput.value = '';
+    renderBarberosList();
 });
 
 document.getElementById('barberos-list').addEventListener('click', (e) => {
@@ -154,7 +180,8 @@ function abrirModal(barberia = null) {
         document.getElementById('barberia-user').value = barberia.username;
         document.getElementById('barberia-password').value = '';
         document.getElementById('barberia-color').value = barberia.color || 'rosado';
-        barberosTemp = Array.isArray(barberia.barberos) ? [...barberia.barberos] : [];
+        const rawBarberos = Array.isArray(barberia.barberos) ? barberia.barberos : [];
+        barberosTemp = rawBarberos.map(b => typeof b === 'string' ? { nombre: b, horario: '' } : b);
     } else {
         modalTitulo.textContent = 'Nueva Barbería';
         barberiaForm.reset();

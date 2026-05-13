@@ -69,8 +69,9 @@ body {
     background: linear-gradient(90deg, #1a1a2e 0%, #16213e 100%);
     padding: 0.6rem 1rem;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
     justify-content: center;
     border-bottom: 2px solid;
     border-image: linear-gradient(90deg, var(--primary), #e94560, var(--primary)) 1;
@@ -102,6 +103,32 @@ body {
 .barberia-selector select option {
     background: #1a1a2e;
     color: var(--text);
+}
+
+.selected-barberia {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+
+.selected-barberia-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    min-width: 260px;
+}
+
+.selected-barberia-logo {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* Navbar */
@@ -612,6 +639,71 @@ footer p {
     text-align: center;
     color: var(--text-muted);
     padding: 2rem;
+}
+
+.barberia-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    margin-top: 0.8rem;
+    padding: 0.8rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+}
+
+.barberia-info-top {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.barberia-logo {
+    width: 85px;
+    height: 85px;
+    object-fit: cover;
+    border-radius: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.barberia-info-text strong {
+    display: block;
+    font-size: 1.2rem;
+    color: var(--primary);
+}
+
+.barbero-schedule {
+    width: 100%;
+    margin-top: 0.8rem;
+}
+
+.barbero-schedule h3 {
+    margin: 0 0 0.6rem 0;
+    color: var(--primary);
+    font-size: 1rem;
+}
+
+.barbero-schedule-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    margin-bottom: 0.5rem;
+}
+
+.barbero-name {
+    color: #fff;
+    font-weight: 600;
+}
+
+.barbero-horario {
+    color: var(--text-muted);
+    font-size: 0.95rem;
 }
 
 /* Responsive */

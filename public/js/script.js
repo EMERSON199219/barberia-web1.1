@@ -2,13 +2,16 @@ const formCita = document.getElementById('formcita');
 const horaSelect = document.getElementById('hora-select');
 const servicioSelect = document.getElementById('servicio-select');
 const dateInput = document.getElementById('fecha');
+const barberoSelect = document.getElementById('barbero-select');
 const availabilityText = document.getElementById('availability-text');
 const barberiasList = document.getElementById('barberias-list');
 const barberiaTitulo = document.getElementById('barberia-titulo');
+const selectedBarberia = document.getElementById('selected-barberia');
 const API_BASE = '/api';
 
 let currentBarberiaId = null;
 let barberiasData = [];
+let currentBarberos = [];
 
 // Cargar barberías como íconos/botones
 async function loadBarberias() {
@@ -58,15 +61,63 @@ async function selectBarberiaBtn(barberiaId) {
         if (data.barberia && data.barberia.color) {
             document.body.classList.add(`barberia-${data.barberia.color}`);
         }
-        barberiaTitulo.textContent = `💈 ${data.barberia ? data.barberia.nombre : 'Barbería'}`;
+        renderBarberoOptions(data.barberia ? data.barberia.barberos || [] : []);
     } catch (error) {
-        barberiaTitulo.textContent = '💈 Barbería';
+        renderBarberoOptions([]);
         console.warn('Error al obtener color de barbería:', error);
     }
     // Recargar turnos si hay fecha seleccionada
     if (dateInput.value) {
         loadBookedHours(dateInput.value);
     }
+}
+
+function renderSelectedBarberia(barberia) {
+    if (!barberia) {
+        selectedBarberia.classList.add('hidden');
+        selectedBarberia.innerHTML = '';
+        return;
+    }
+
+    const logoHtml = barberia.logoUrl ? `<img src="${barberia.logoUrl}" alt="Logo de ${barberia.nombre}" class="selected-barberia-logo">` : '';
+    const barberos = barberia.barberos || [];
+    const barberoHtml = barberos.length > 0
+        ? `${barberos.map(barbero => {
+            const nombre = typeof barbero === 'string' ? barbero : barbero.nombre || '';
+            const horario = typeof barbero === 'string' ? '' : barbero.horario || '';
+            return `<div class="barbero-schedule-item"><span class="barbero-name">${nombre}</span><span class="barbero-horario">${horario || 'Horario no definido'}</span></div>`;
+        }).join('')}`
+        : '<p>No hay barberos registrados para esta barbería.</p>';
+
+    selectedBarberia.classList.remove('hidden');
+    selectedBarberia.innerHTML = `
+        <div class="selected-barberia-card">
+            ${logoHtml}
+            <div>
+                <strong>${barberia.nombre}</strong>
+                <div class="barbero-schedule">${barberoHtml}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderBarberoOptions(barberos) {
+    barberoSelect.innerHTML = '<option value="">Selecciona un barbero</option>';
+    if (!Array.isArray(barberos) || barberos.length === 0) {
+        barberoSelect.disabled = true;
+        return;
+    }
+
+    currentBarberos = barberos;
+    barberoSelect.disabled = false;
+    barberos.forEach((barbero, index) => {
+        const nombre = typeof barbero === 'string' ? barbero : barbero.nombre || '';
+        const horario = typeof barbero === 'string' ? '' : barbero.horario || '';
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${nombre}${horario ? ' — ' + horario : ''}`;
+        barberoSelect.appendChild(option);
+    });
 }
 
 function setAvailableTimes(bookedHours) {
@@ -104,13 +155,15 @@ async function loadBookedHours(date) {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/turnos?barberiaId=${encodeURIComponent(currentBarberiaId)}&date=${encodeURIComponent(date)}`);
+        const selectedBarbero = barberoSelect.value ? currentBarberos[parseInt(barberoSelect.value, 10)] : null;
+        const barberoQuery = selectedBarbero ? `&barbero=${encodeURIComponent(selectedBarbero.nombre || selectedBarbero)}` : '';
+        const response = await fetch(`${API_BASE}/turnos?barberiaId=${encodeURIComponent(currentBarberiaId)}&date=${encodeURIComponent(date)}${barberoQuery}`);
         if (!response.ok) {
             throw new Error('No se pudieron cargar los turnos ocupados');
         }
 
         const data = await response.json();
-        setAvailableTimes(data.horas || []);
+        setAvailableTimes((data.turnos || []).map(turno => turno.hora));
     } catch (error) {
         console.warn(error.message);
         setAvailableTimes([]);
@@ -119,6 +172,12 @@ async function loadBookedHours(date) {
 
 dateInput.addEventListener('change', () => {
     loadBookedHours(dateInput.value);
+});
+
+barberoSelect.addEventListener('change', () => {
+    if (dateInput.value) {
+        loadBookedHours(dateInput.value);
+    }
 });
 
 formCita.addEventListener('submit', async function(e) {
@@ -132,16 +191,32 @@ formCita.addEventListener('submit', async function(e) {
     const nombre = document.getElementById('nombre').value.trim();
     const telefono = document.getElementById('telefono').value.trim();
     const fecha = dateInput.value;
+    const barberoIndex = barberoSelect.value;
     const hora = horaSelect.value;
     const servicio = servicioSelect.value;
     const notas = document.getElementById('notas').value.trim();
 
-    if (!nombre || !telefono || !fecha || !hora || !servicio) {
+    if (!nombre || !telefono || !fecha || !barberoIndex || !hora || !servicio) {
         alert('Por favor, completa todos los campos requeridos');
         return;
     }
 
-    const cita = { barberiaId: currentBarberiaId, nombre, telefono, fecha, hora, servicio, notas };
+    const selectedBarbero = currentBarberos[parseInt(barberoIndex, 10)];
+    if (!selectedBarbero) {
+        alert('Selecciona un barbero válido');
+        return;
+    }
+
+    const cita = {
+        barberiaId: currentBarberiaId,
+        nombre,
+        telefono,
+        fecha,
+        barbero: selectedBarbero,
+        hora,
+        servicio,
+        notas
+    };
 
     try {
         const response = await fetch(`${API_BASE}/citas`, {
@@ -181,5 +256,6 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 });
 
 // Inicializar
+renderBarberoOptions([]);
 loadBarberias();
 availabilityText.textContent = 'Selecciona una barbería y fecha para ver turnos disponibles';

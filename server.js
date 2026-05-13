@@ -17,7 +17,18 @@ const storage = multer.diskStorage({
         cb(null, file.fieldname + '-' + uniqueSuffix + ext);
     }
 });
-const upload = multer({ storage });
+const upload = multer({
+    storage,
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+            return cb(new Error('Solo se permiten archivos de imagen'));
+        }
+        cb(null, true);
+    },
+    limits: {
+        fileSize: 2 * 1024 * 1024 // 2MB
+    }
+});
 
 // Servir logos como archivos estáticos
 app.use('/logos', express.static(LOGOS_DIR));
@@ -27,37 +38,11 @@ const DATA_DIR = path.join(__dirname, 'data');
 const BARBERIAS_FILE = path.join(DATA_DIR, 'barberias.json');
 
 // Credenciales del superadmin
-const SUPERADMIN_USER = 'superadmin';
-const SUPERADMIN_PASSWORD = 'superadmin123';
+const SUPERADMIN_USER = process.env.SUPERADMIN_USER || 'superadmin';
+const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || 'superadmin123';
 
 // Tokens activos (token -> { barberiaId, role })
 const tokens = new Map();
-
-require('dotenv').config();
-
-// MongoDB Atlas
-const { MongoClient, ObjectId } = require('mongodb');
-const client = new MongoClient(process.env.MONGODB_URI);
-let db;
-let barberiasCollection;
-
-async function connectMongo() {
-    if (!db) {
-        await client.connect();
-        db = client.db('barberia'); // nombre de tu base de datos
-        barberiasCollection = db.collection('barberias');
-    }
-}
-
-// Middleware para asegurar conexión
-async function mongoMiddleware(req, res, next) {
-    try {
-        await connectMongo();
-        next();
-    } catch (err) {
-        res.status(500).json({ error: 'Error de conexión a la base de datos' });
-    }
-}
 
 // Utilidades para manejo de archivos locales
 function getBarberiasPath() {
@@ -70,6 +55,39 @@ function getCitasPath(barberiaId) {
 
 app.use(express.json());
 app.use(express.static('public'));
+
+function asyncHandler(fn) {
+    return function (req, res, next) {
+        Promise.resolve(fn(req, res, next)).catch(next);
+    };
+}
+
+function validateRequest(source, requiredFields = []) {
+    const errors = [];
+    requiredFields.forEach((field) => {
+        const value = source[field];
+        if (value === undefined || value === null || value === '') {
+            errors.push(`Campo requerido: ${field}`);
+        }
+    });
+    if (source.telefono && !/^[0-9+()\s-]{7,20}$/.test(source.telefono)) {
+        errors.push('Teléfono inválido');
+    }
+    if (source.fecha && !/^\d{4}-\d{2}-\d{2}$/.test(source.fecha)) {
+        errors.push('Fecha inválida');
+    }
+    if (source.hora && !/^\d{2}:\d{2}$/.test(source.hora)) {
+        errors.push('Hora inválida');
+    }
+    if (source.barbero && typeof source.barbero === 'object' && !source.barbero.nombre) {
+        errors.push('El barbero debe tener un nombre');
+    }
+    return errors;
+}
+
+function respondValidationError(res, errors) {
+    return res.status(400).json({ error: 'Datos inválidos', details: errors });
+}
 
 // ==================== UTILIDADES ====================
 
@@ -126,19 +144,28 @@ function superadminMiddleware(req, res, next) {
 // ==================== AUTH ====================
 
 // Login superadmin
-app.post('/api/superadmin/login', (req, res) => {
+app.post('/api/superadmin/login', asyncHandler(async (req, res) => {
     const { username, password } = req.body;
+    const errors = validateRequest(req.body, ['username', 'password']);
+    if (errors.length) {
+        return respondValidationError(res, errors);
+    }
     if (username === SUPERADMIN_USER && password === SUPERADMIN_PASSWORD) {
         const token = crypto.randomBytes(24).toString('hex');
         tokens.set(token, { barberiaId: null, role: 'superadmin' });
         return res.json({ token, role: 'superadmin' });
     }
     res.status(401).json({ error: 'Credenciales incorrectas' });
-});
+}));
+
 
 // Login barbería (archivos locales)
-app.post('/api/barberia/login', async (req, res) => {
+app.post('/api/barberia/login', asyncHandler(async (req, res) => {
     const { username, password, barberiaId } = req.body;
+    const errors = validateRequest(req.body, ['username', 'password']);
+    if (errors.length) {
+        return respondValidationError(res, errors);
+    }
     const barberias = await readJson(getBarberiasPath(), '[]');
     let barberia;
     if (barberiaId) {
@@ -162,7 +189,7 @@ app.post('/api/barberia/login', async (req, res) => {
         });
     }
     res.status(401).json({ error: 'Credenciales incorrectas' });
-});
+}));
 
 // Logout
 app.post('/api/logout', authMiddleware, (req, res) => {
@@ -300,16 +327,23 @@ app.get('/api/barberias/:id', async (req, res) => {
     if (!barberia) {
         return res.status(404).json({ error: 'Barbería no encontrada' });
     }
-    res.json({ barberia: { id: barberia.id, nombre: barberia.nombre, color: barberia.color } });
+    res.json({ barberia: {
+        id: barberia.id,
+        nombre: barberia.nombre,
+        color: barberia.color,
+        logoUrl: barberia.logoUrl || null,
+        barberos: barberia.barberos || []
+    } });
 });
 
 // ==================== CITAS (archivos locales) ====================
 
 // Crear cita (público - requiere barberiaId)
-app.post('/api/citas', async (req, res) => {
-    const { barberiaId, nombre, telefono, fecha, hora, servicio, notas } = req.body;
-    if (!barberiaId || !nombre || !telefono || !fecha || !hora || !servicio) {
-        return res.status(400).json({ error: 'Faltan campos obligatorios' });
+app.post('/api/citas', asyncHandler(async (req, res) => {
+    const { barberiaId, nombre, telefono, fecha, hora, servicio, notas, barbero } = req.body;
+    const errors = validateRequest(req.body, ['barberiaId', 'nombre', 'telefono', 'fecha', 'hora', 'servicio', 'barbero']);
+    if (errors.length) {
+        return respondValidationError(res, errors);
     }
     // Verificar que la barbería existe y está activa
     const barberias = await readJson(getBarberiasPath(), '[]');
@@ -319,9 +353,15 @@ app.post('/api/citas', async (req, res) => {
     }
     const citasPath = getCitasPath(barberiaId);
     const citas = await readJson(citasPath, '[]');
-    const turnoOcupado = citas.find(c => c.fecha === fecha && c.hora === hora);
+    const turnoOcupado = citas.find(c =>
+        c.fecha === fecha &&
+        c.hora === hora &&
+        c.barbero &&
+        ((typeof c.barbero === 'string' && c.barbero === (typeof barbero === 'string' ? barbero : barbero.nombre)) ||
+         (typeof c.barbero === 'object' && c.barbero.nombre === (typeof barbero === 'object' ? barbero.nombre : barbero)))
+    );
     if (turnoOcupado) {
-        return res.status(409).json({ error: 'El turno ya está reservado para esta fecha' });
+        return res.status(409).json({ error: 'El turno ya está reservado para este barbero en esa fecha' });
     }
     const cita = {
         id: crypto.randomBytes(12).toString('hex'),
@@ -331,26 +371,32 @@ app.post('/api/citas', async (req, res) => {
         hora,
         servicio,
         notas,
+        barbero,
         fechaCreacion: new Date().toISOString()
     };
     citas.push(cita);
     await writeJson(citasPath, citas);
     res.status(201).json({ message: 'Cita reservada', cita });
-});
+}));
 
 // Obtener turnos ocupados (archivos locales)
-app.get('/api/turnos', async (req, res) => {
-    const { barberiaId, date } = req.query;
-    if (!barberiaId || !date) {
-        return res.status(400).json({ error: 'Faltan parámetros' });
+app.get('/api/turnos', asyncHandler(async (req, res) => {
+    const { barberiaId, date, barbero } = req.query;
+    const errors = validateRequest(req.query, ['barberiaId', 'date']);
+    if (errors.length) {
+        return respondValidationError(res, errors);
     }
     const citasPath = getCitasPath(barberiaId);
-    const turnos = (await readJson(citasPath, '[]')).filter(c => c.fecha === date);
+    const turnos = (await readJson(citasPath, '[]')).filter(c => {
+        if (c.fecha !== date) return false;
+        if (!barbero) return true;
+        return c.barbero && (c.barbero.nombre === barbero || c.barbero === barbero);
+    });
     res.json({ turnos });
-});
+}));
 
 // Obtener citas (admin de barbería)
-app.get('/api/citas', authMiddleware, async (req, res) => {
+app.get('/api/citas', authMiddleware, asyncHandler(async (req, res) => {
     if (req.tokenData.role !== 'admin') {
         return res.status(403).json({ error: 'Acceso denegado' });
     }
@@ -360,16 +406,20 @@ app.get('/api/citas', authMiddleware, async (req, res) => {
     const citas = await readJson(citasPath, '[]');
     
     res.json({ citas });
-});
+}));
 
 // Actualizar cita
-app.put('/api/citas/:id', authMiddleware, async (req, res) => {
+app.put('/api/citas/:id', authMiddleware, asyncHandler(async (req, res) => {
     if (req.tokenData.role !== 'admin') {
         return res.status(403).json({ error: 'Acceso denegado' });
     }
     
     const { id } = req.params;
-    const { nombre, telefono, fecha, hora, servicio, notas } = req.body;
+    const { nombre, telefono, fecha, hora, servicio, notas, barbero } = req.body;
+    const errors = validateRequest(req.body, ['nombre', 'telefono', 'fecha', 'hora', 'servicio']);
+    if (errors.length) {
+        return respondValidationError(res, errors);
+    }
     const barberiaId = req.tokenData.barberiaId;
     
     const citasPath = getCitasPath(barberiaId);
@@ -380,12 +430,17 @@ app.put('/api/citas/:id', authMiddleware, async (req, res) => {
         return res.status(404).json({ error: 'Cita no encontrada' });
     }
     
-    // Verificar turno ocupado (excluyendo esta cita)
+    const barberoToCheck = barbero || citas[index].barbero;
     const turnoOcupado = citas.some((cita, idx) => 
-        idx !== index && cita.fecha === fecha && cita.hora === hora
+        idx !== index &&
+        cita.fecha === fecha &&
+        cita.hora === hora &&
+        cita.barbero &&
+        ((typeof cita.barbero === 'string' && cita.barbero === (typeof barberoToCheck === 'string' ? barberoToCheck : barberoToCheck?.nombre)) ||
+         (typeof cita.barbero === 'object' && cita.barbero.nombre === (typeof barberoToCheck === 'object' ? barberoToCheck.nombre : barberoToCheck)))
     );
     if (turnoOcupado) {
-        return res.status(409).json({ error: 'El turno ya está reservado para esta fecha' });
+        return res.status(409).json({ error: 'El turno ya está reservado para este barbero en esa fecha' });
     }
     
     citas[index] = {
@@ -395,15 +450,16 @@ app.put('/api/citas/:id', authMiddleware, async (req, res) => {
         fecha,
         hora,
         servicio,
-        notas
+        notas,
+        barbero: barbero || citas[index].barbero
     };
     
     await writeJson(citasPath, citas);
     res.json({ message: 'Cita actualizada', cita: citas[index] });
-});
+}));
 
 // Eliminar cita
-app.delete('/api/citas/:id', authMiddleware, async (req, res) => {
+app.delete('/api/citas/:id', authMiddleware, asyncHandler(async (req, res) => {
     if (req.tokenData.role !== 'admin') {
         return res.status(403).json({ error: 'Acceso denegado' });
     }
@@ -423,7 +479,7 @@ app.delete('/api/citas/:id', authMiddleware, async (req, res) => {
     await writeJson(citasPath, citas);
     
     res.json({ message: 'Cita cancelada', cita: deleted[0] });
-});
+}));
 
 // ==================== RUTAS ====================
 
@@ -437,6 +493,14 @@ app.get('/admin', (req, res) => {
 
 app.get('/superadmin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'superadmin.html'));
+});
+
+// Manejo global de errores
+app.use((err, req, res, next) => {
+    console.error(err);
+    const status = err.status || 500;
+    const message = err.message || 'Error interno del servidor';
+    res.status(status).json({ error: message });
 });
 
 // Iniciar servidor

@@ -84,6 +84,7 @@ async function renderCitas() {
             row.innerHTML = `
                 <td>${cita.nombre}</td>
                 <td>${cita.telefono}</td>
+                <td>${cita.barbero ? cita.barbero.nombre || cita.barbero : '-'}</td>
                 <td>${cita.servicio}</td>
                 <td>${cita.fecha}</td>
                 <td>${cita.hora}</td>
@@ -175,9 +176,12 @@ citasTableBody.addEventListener('click', async (e) => {
         const nuevaHora = prompt('Nueva hora (HH:MM):', '08:00');
         if (!nuevaHora) return;
         
-        // Obtener la cita actual para mantener los demas datos
         const data = await request('/citas');
         const cita = data.citas.find(c => c.id === citaId);
+        if (!cita) {
+            alert('Cita no encontrada');
+            return;
+        }
         
         await request(`/citas/${citaId}`, {
             method: 'PUT',
@@ -187,7 +191,8 @@ citasTableBody.addEventListener('click', async (e) => {
                 fecha: nuevaFecha, 
                 hora: nuevaHora,
                 servicio: cita.servicio,
-                notas: cita.notas
+                notas: cita.notas,
+                barbero: cita.barbero
             }),
         });
         renderCitas();
@@ -195,9 +200,12 @@ citasTableBody.addEventListener('click', async (e) => {
     }
 
     if (button.classList.contains('edit-btn')) {
-        // Obtener la cita actual
         const data = await request('/citas');
         const cita = data.citas.find(c => c.id === citaId);
+        if (!cita) {
+            alert('Cita no encontrada');
+            return;
+        }
         
         const nombre = prompt('Nombre:', cita.nombre);
         if (!nombre) return;
@@ -205,11 +213,19 @@ citasTableBody.addEventListener('click', async (e) => {
         if (!telefono) return;
         const servicio = prompt('Servicio:', cita.servicio);
         if (!servicio) return;
-        const notas = prompt('Notas:', cita.notas);
+        const notas = prompt('Notas:', cita.notas || '');
 
         await request(`/citas/${citaId}`, {
             method: 'PUT',
-            body: JSON.stringify({ nombre, telefono, servicio, notas }),
+            body: JSON.stringify({
+                nombre,
+                telefono,
+                fecha: cita.fecha,
+                hora: cita.hora,
+                servicio,
+                notas,
+                barbero: cita.barbero
+            }),
         });
         renderCitas();
     }

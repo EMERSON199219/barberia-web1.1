@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": "0af27583ab915071d4d836a4",
+    "nombre": "emerson",
+    "telefono": "3217161234",
+    "servicio": "corte_clasico",
+    "notas": null,
+    "fechaCreacion": "2026-04-24T17:13:01.603Z"
+  },
+  {
+    "id": "8a9760ff9e45e30a81448d56",
+    "nombre": "emerson",
+    "telefono": "3217161234",
+    "fecha": "2026-04-25",
+    "hora": "08:00",
+    "servicio": "corte_clasico",
+    "notas": "",
+    "barbero": {
+      "nombre": "juan",
+      "horario": ""
+    },
+    "fechaCreacion": "2026-04-25T01:09:44.075Z"
+  },
+  {
+    "id": "47d835f63a03dd1200a051be",
+    "nombre": "Emerson",
+    "telefono": "7563030",
+    "fecha": "2026-04-25",
+    "hora": "09:00",
+    "servicio": "corte_barba",
+    "notas": "",
+    "barbero": {
+      "nombre": "juan",
+      "horario": ""
+    },
+    "fechaCreacion": "2026-04-25T01:11:03.999Z"
+  }
+]
